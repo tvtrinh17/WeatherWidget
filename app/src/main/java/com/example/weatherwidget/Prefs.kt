@@ -13,6 +13,11 @@ class Prefs(ctx: Context) {
     var textColor: Int get() = sp.getInt("text", 0); set(v) = sp.edit().putInt("text", v).apply()     // 0 đen than, 1 trắng, 2 xanh navy
     var city: Int get() = sp.getInt("city", 0); set(v) = sp.edit().putInt("city", v).apply()
     var cache: String? get() = sp.getString("cache", null); set(v) = sp.edit().putString("cache", v).apply()
+    var events: String? get() = sp.getString("events", null); set(v) = sp.edit().putString("events", v).apply()
+    var notifyHour: Int get() = sp.getInt("notify_hour", 7); set(v) = sp.edit().putInt("notify_hour", v).apply()
+    var sent: Set<String>
+        get() = sp.getStringSet("sent", emptySet()) ?: emptySet()
+        set(v) = sp.edit().putStringSet("sent", HashSet(v)).apply()
 
     companion object {
         val TONES = intArrayOf(0xFFFFFFFF.toInt(), 0xFF2B2B2E.toInt(), 0xFFDCEBFA.toInt(), 0xFFF3EBDD.toInt())

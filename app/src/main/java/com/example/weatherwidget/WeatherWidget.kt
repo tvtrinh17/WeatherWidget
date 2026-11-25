@@ -105,6 +105,17 @@ class WeatherWidget : AppWidgetProvider() {
                 v.addView(R.id.forecast, cell)
             }
 
+            // Sự kiện âm lịch gần nhất (trong 30 ngày tới)
+            val next = Events.scan(ctx, 30).firstOrNull()
+            if (next != null) {
+                v.setViewVisibility(R.id.event, android.view.View.VISIBLE)
+                v.setTextViewText(R.id.event, "🕯️ ${next.event.name} • " +
+                    if (next.offset == 0) "hôm nay" else "còn ${next.offset} ngày")
+                v.setTextColor(R.id.event, text)
+            } else {
+                v.setViewVisibility(R.id.event, android.view.View.GONE)
+            }
+
             // Màu chữ chung
             listOf(R.id.greeting, R.id.clock, R.id.date, R.id.lunar, R.id.temp, R.id.desc, R.id.loc, R.id.battery)
                 .forEach { v.setTextColor(it, text) }

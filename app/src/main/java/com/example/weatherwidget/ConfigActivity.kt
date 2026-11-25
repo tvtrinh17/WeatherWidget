@@ -46,6 +46,11 @@ class ConfigActivity : Activity() {
             root.addView(tv); root.addView(sb, ViewGroup.LayoutParams(-1, -2))
         }
 
+        root.addView(Button(this).apply {
+            text = "🕯️ Sự kiện âm lịch (giỗ, kỵ, ăn chay…)"; isAllCaps = false
+            setOnClickListener { startActivity(Intent(context, EventsActivity::class.java)) }
+        }, LinearLayout.LayoutParams(-1, -2))
+
         title("1. Kính lòng & khung viền")
         radio(listOf("Trắng", "Khói tối", "Xanh băng", "Kem ấm"), p.tone) { p.tone = it }
         slider("Độ đục nền (%)", 0, 100, p.opacity) { p.opacity = it }
