@@ -21,6 +21,13 @@ class WeatherWidget : AppWidgetProvider() {
         }
     }
 
+    // Khi người dùng kéo giãn widget: vẽ lại nền đúng kích thước mới (dùng dữ liệu đã lưu, không gọi mạng)
+    override fun onAppWidgetOptionsChanged(
+        ctx: Context, mgr: AppWidgetManager, id: Int, newOptions: android.os.Bundle
+    ) {
+        thread { refresh(ctx, mgr, intArrayOf(id), useCache = true) }
+    }
+
     companion object {
         fun updateAll(ctx: Context) {
             val mgr = AppWidgetManager.getInstance(ctx)
@@ -28,13 +35,13 @@ class WeatherWidget : AppWidgetProvider() {
             thread { refresh(ctx, mgr, ids) }
         }
 
-        private fun refresh(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
+        private fun refresh(ctx: Context, mgr: AppWidgetManager, ids: IntArray, useCache: Boolean = false) {
             if (ids.isEmpty()) return
             val p = Prefs(ctx)
             val (cityName, lat, lon) = Prefs.CITIES[p.city.coerceIn(0, Prefs.CITIES.lastIndex)]
 
             // Thời tiết: ưu tiên mạng, lỗi thì dùng bản lưu gần nhất
-            val json = try {
+            val json = if (useCache && p.cache != null) p.cache else try {
                 Weather.fetchJson(lat, lon).also { p.cache = it }
             } catch (e: Exception) { p.cache }
             val w = json?.let { runCatching { Weather.parse(it) }.getOrNull() }
@@ -42,9 +49,6 @@ class WeatherWidget : AppWidgetProvider() {
             val text = Prefs.TEXTS[p.textColor.coerceIn(0, 2)]
             val v = RemoteViews(ctx.packageName, R.layout.widget)
             val now = Calendar.getInstance()
-
-            // Nền kính
-            v.setImageViewBitmap(R.id.bg, background(p))
 
             // Đồng hồ + ngày
             v.setTextViewTextSize(R.id.clock, android.util.TypedValue.COMPLEX_UNIT_SP, p.clockSize.toFloat())
@@ -120,22 +124,43 @@ class WeatherWidget : AppWidgetProvider() {
             listOf(R.id.greeting, R.id.clock, R.id.date, R.id.lunar, R.id.temp, R.id.desc, R.id.loc, R.id.battery)
                 .forEach { v.setTextColor(it, text) }
 
-            ids.forEach { mgr.updateAppWidget(it, v) }
+            // Nền kính vẽ theo đúng kích thước thật của từng widget (không bị méo góc)
+            ids.forEach { id ->
+                v.setImageViewBitmap(R.id.bg, background(ctx, p, mgr, id))
+                mgr.updateAppWidget(id, v)
+            }
         }
 
-        private fun background(p: Prefs): Bitmap {
-            val w = 720; val h = 520
+        private fun background(ctx: Context, p: Prefs, mgr: AppWidgetManager, id: Int): Bitmap {
+            val density = ctx.resources.displayMetrics.density
+            val o = mgr.getAppWidgetOptions(id)
+            val land = ctx.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            val wDp = (if (land) o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+                       else o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)).takeIf { it > 0 } ?: 340
+            val hDp = (if (land) o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+                       else o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)).takeIf { it > 0 } ?: 300
+
+            // Kích thước thật (px); thu nhỏ nếu quá lớn để tránh vượt giới hạn bộ nhớ của widget
+            var scale = 1f
+            val maxPixels = 1_400_000f
+            val real = wDp * density * hDp * density
+            if (real > maxPixels) scale = Math.sqrt((maxPixels / real).toDouble()).toFloat()
+            val w = (wDp * density * scale).toInt().coerceAtLeast(2)
+            val h = (hDp * density * scale).toInt().coerceAtLeast(2)
+
             val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
             val c = Canvas(bmp)
-            val r = p.radius * 2.1f
+            val inset = 1.5f * density * scale
+            val rect = RectF(inset, inset, w - inset, h - inset)
+            val r = minOf(p.radius * density * scale, rect.width() / 2, rect.height() / 2)
+
             val base = Prefs.TONES[p.tone.coerceIn(0, 3)]
             val a = (p.opacity.coerceIn(0, 100) * 255 / 100)
             val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = (base and 0x00FFFFFF) or (a shl 24) }
-            val rect = RectF(4f, 4f, w - 4f, h - 4f)
             c.drawRoundRect(rect, r, r, fill)
             if (p.border > 0) {
                 val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    style = Paint.Style.STROKE; strokeWidth = 3f
+                    style = Paint.Style.STROKE; strokeWidth = 1.5f * density * scale
                     color = Color.argb(p.border * 255 / 100, 255, 255, 255)
                 }
                 c.drawRoundRect(rect, r, r, stroke)
